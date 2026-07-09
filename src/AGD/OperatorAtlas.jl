@@ -1,0 +1,342 @@
+module OperatorAtlas
+
+############################################################
+# EXPORTS
+############################################################
+
+export OperatorClass
+export OperatorAtlasState
+export register_operator!
+export operator_count
+
+############################################################
+# OPERATOR CLASS
+############################################################
+
+mutable struct OperatorClass
+
+    id::Int
+
+    name::String
+
+    description::String
+
+    usage::Int
+
+    success::Int
+
+    failure::Int
+
+end
+
+############################################################
+# ATLAS
+############################################################
+
+mutable struct OperatorAtlasState
+
+    operators::Vector{OperatorClass}
+
+    nextid::Int
+
+end
+
+############################################################
+# CONSTRUCTOR
+############################################################
+
+OperatorAtlasState() = OperatorAtlasState(
+    OperatorClass[],
+    1
+)
+
+############################################################
+# REGISTER
+############################################################
+
+function register_operator!(
+    atlas::OperatorAtlasState,
+    name::String,
+    description::String=""
+)
+
+    for op in atlas.operators
+
+        if op.name == name
+            return op
+        end
+
+    end
+
+    obj = OperatorClass(
+        atlas.nextid,
+        name,
+        description,
+        0,
+        0,
+        0
+    )
+
+    push!(atlas.operators,obj)
+
+    atlas.nextid += 1
+
+    return obj
+
+end
+
+############################################################
+# COUNT
+############################################################
+
+function operator_count(
+    atlas::OperatorAtlasState
+)
+
+    return length(atlas.operators)
+
+end
+
+
+############################################################
+# FIND OPERATOR
+############################################################
+
+export find_operator
+
+function find_operator(
+    atlas::OperatorAtlasState,
+    name::String
+)
+
+    for op in atlas.operators
+        if op.name == name
+            return op
+        end
+    end
+
+    return nothing
+
+end
+
+############################################################
+# RECORD SUCCESS
+############################################################
+
+export record_success!
+
+function record_success!(
+    atlas::OperatorAtlasState,
+    name::String
+)
+
+    op = find_operator(atlas,name)
+
+    op === nothing && return nothing
+
+    op.usage += 1
+    op.success += 1
+
+    return op
+
+end
+
+############################################################
+# RECORD FAILURE
+############################################################
+
+export record_failure!
+
+function record_failure!(
+    atlas::OperatorAtlasState,
+    name::String
+)
+
+    op = find_operator(atlas,name)
+
+    op === nothing && return nothing
+
+    op.usage += 1
+    op.failure += 1
+
+    return op
+
+end
+
+############################################################
+# SUCCESS RATE
+############################################################
+
+export success_rate
+
+function success_rate(op::OperatorClass)
+
+    op.usage == 0 && return 0.0
+
+    return op.success / op.usage
+
+end
+
+############################################################
+# SUMMARY
+############################################################
+
+export atlas_summary
+
+function atlas_summary(
+    atlas::OperatorAtlasState
+)
+
+    println()
+    println("==============================")
+    println("Operator Atlas")
+    println("==============================")
+
+    for op in atlas.operators
+
+        println(
+            op.id,
+            " ",
+            rpad(op.name,15),
+            " usage=",
+            op.usage,
+            " success=",
+            op.success,
+            " failure=",
+            op.failure,
+            " rate=",
+            round(success_rate(op),digits=3)
+        )
+
+    end
+
+    println()
+
+end
+
+
+############################################################
+# CONFIDENCE
+############################################################
+
+export confidence
+
+function confidence(op::OperatorClass)
+
+    total = op.success + op.failure
+
+    if total == 0
+        return 0.0
+    end
+
+    return op.success / total
+
+end
+
+############################################################
+# BEST OPERATOR
+############################################################
+
+export best_operator
+
+function best_operator(
+    atlas::OperatorAtlasState
+)
+
+    isempty(atlas.operators) && return nothing
+
+    best = atlas.operators[1]
+    score = confidence(best)
+
+    for op in atlas.operators
+
+        c = confidence(op)
+
+        if c > score
+
+            best = op
+            score = c
+
+        end
+
+    end
+
+    return best
+
+end
+
+
+############################################################
+# COST
+############################################################
+
+export record_cost!
+export average_cost
+
+const OPERATOR_COSTS = Dict{Int,Vector{Float64}}()
+
+function record_cost!(
+    atlas::OperatorAtlasState,
+    name::String,
+    cost::Float64
+)
+
+    op = find_operator(atlas,name)
+
+    op === nothing && return nothing
+
+    if !haskey(OPERATOR_COSTS,op.id)
+        OPERATOR_COSTS[op.id] = Float64[]
+    end
+
+    push!(OPERATOR_COSTS[op.id],cost)
+
+    return op
+
+end
+
+function average_cost(op::OperatorClass)
+
+    if !haskey(OPERATOR_COSTS,op.id)
+        return 0.0
+    end
+
+    v = OPERATOR_COSTS[op.id]
+
+    isempty(v) && return 0.0
+
+    return sum(v)/length(v)
+
+end
+
+############################################################
+# ATLAS DETAIL
+############################################################
+
+export atlas_detail
+
+function atlas_detail(
+    atlas::OperatorAtlasState
+)
+
+    println()
+    println("Operator Atlas Detail")
+    println("==============================")
+
+    for op in atlas.operators
+
+        println(
+            rpad(op.name,15),
+            " confidence=",
+            round(confidence(op),digits=3),
+            " avg_cost=",
+            round(average_cost(op),digits=3)
+        )
+
+    end
+
+    println()
+
+end
+
+end
